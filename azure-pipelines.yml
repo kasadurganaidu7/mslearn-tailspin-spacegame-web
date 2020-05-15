@@ -1,11 +1,19 @@
 trigger:
   - '*'
   
-  variables:
+variables:
     buildConfiguration: 'Release'
     releaseBranchName: 'release-pipeline'
-  
-  stages:
+    wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
+    dotnetSdkVersion: '3.1.100'
+schedules:
+  - cron: '0 3 * * *' 
+    displayName: 'Deploy evert day at 3 am'
+    branches:
+      include:
+        - 'release-pipeline'
+    always: false
+stages:
   - stage: 'Build'
     displayName: 'Build the web application'
     jobs: 
@@ -65,7 +73,6 @@ trigger:
   
       - publish: '$(Build.ArtifactStagingDirectory)'
         artifact: drop
-  
   - stage: 'Dev'
     displayName: 'Deploy to the dev environment'
     dependsOn: Build
@@ -93,4 +100,27 @@ trigger:
               inputs:
                 azureSubscription: 'Resource Manager - Tailspin - Space Game'
                 appName: '$(WebAppNameDev)'
+                package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+  - stage: 'Test'
+    displayName: 'Deploy to the test environment'
+    dependsOn: dev
+    #condition: eq(variables['Build.Reason'],'Schedule')
+    jobs:
+    - deployment: Deploy
+      pool:
+        vmImage: 'ubuntu-16.04'
+      environment: test
+      variables:
+      - group: Release
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - download: current
+              artifact: drop
+            - task: AzureWebApp@1
+              displayName: 'Azure App Service Deploy: website'
+              inputs:
+                azureSubscription: 'Resource Manager - Tailspin - Space Game'
+                appName: '$(WebAppNameTest)'
                 package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
